@@ -20,6 +20,6 @@ for commit in RepositoryMining(working_dir).traverse_commits():
     for file in files_changed:
         if not file in sentiments:
             sentiments[file] = []
-        sentiments[file].extend(sentiment)
+        sentiments[file].extend([sentiment])
 
 print(sentiments)
