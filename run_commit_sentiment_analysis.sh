@@ -21,7 +21,11 @@ for project in Chart Lang Math Time Mockito Closure; do
   mkdir -p $tmp_dir
   $D4J checkout -p $project -v ${max_bug_id}f -w $tmp_dir
   pushd $tmp_dir > /dev/null 2>&1
-    git checkout -b sentiment_analysis $max_bug_commit_hash
+    if [[ $project == "Math" ]] || [[ $project == "Lang" ]]; then
+      git checkout trunk
+    else
+      git checkout master
+    fi
   popd > /dev/null 2>&1
   python3 commit_sentiment_analysis.py $project $tmp_dir $all_fix_commits "data/$project-sentiment-analysis.csv"
   rm -rf $tmp_dir
