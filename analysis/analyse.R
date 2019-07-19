@@ -114,6 +114,9 @@ write.macro("negativeNoSubj", sentiment_no_subj %>% filter(sentiment_score < 0) 
 write.macro("negativeNoSubjUseful", sentiment_no_subj %>% filter(sentiment_score < 0, grepl("useful", commit_msg, ignore.case=T)) %>% count(), round.dp=0, min.dp=0)
 write.macro("negativeNoSubjHarder", sentiment_no_subj %>% filter(sentiment_score < 0, grepl("harder", commit_msg, ignore.case=T)) %>% count(), round.dp=0, min.dp=0)
 
+write.macro("subjNoSent", data %>% filter(subjectivity_score == 1, sentiment_score == 0) %>% count(), round.dp=0, min.dp=0)
+write.macro("subjNoSentFinal", data %>% filter(subjectivity_score == 1, sentiment_score == 0, grepl("final", commit_msg, ignore.case=T)) %>% count(), round.dp=0, min.dp=0)
+
 # rq 2 macros
 fault_fix_commits <- data %>% filter(bug_fix_commit==T)
 plot <- data %>% ggplot(aes(y=sentiment_score,x=project)) + geom_boxplot(aes(group=interaction(project,bug_fix_commit),fill=bug_fix_commit)) + theme(legend.position="bottom")
