@@ -30,5 +30,5 @@ with open(output_file, 'w+') as outfile:
         sentiment = blob.sentiment.polarity
         subjectivity = blob.sentiment.subjectivity
         for file in files_changed:
-            outfile.write("{},{},{},{},{},{},{}\n".format(project,commit.hash,commit_filter.replace("\n","\\n").replace(",",".").replace("\"","\\\""),file,sentiment,subjectivity,commit.hash in fix_commits))
+            outfile.write("{},{},\"{}\",{},{},{},{}\n".format(project,commit.hash,commit_filter.replace("\n","\\n").replace(",",".").replace("\"","\\\""),file,sentiment,subjectivity,commit.hash in fix_commits))
     outfile.close()
