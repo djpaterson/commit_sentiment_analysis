@@ -1,3 +1,10 @@
+macro.file <- paste(Sys.getenv("THESIS_DIR"), "rmacros.tex", sep="/")
+macro.file.bak <- paste(macro.file, ".bak", sep="")
+# backup macro file
+file.copy(macro.file, macro.file.bak, overwrite=T)
+# delete macro file
+unlink(macro.file)
+
 write.macro <- function(name, value, comment="", min.dp=2, round.dp=2, xspace=T){
   if("tbl_df" %in% class(value)){
     value <- value[[1]][1]
