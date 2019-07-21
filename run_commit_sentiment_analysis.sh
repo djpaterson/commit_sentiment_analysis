@@ -30,3 +30,10 @@ for project in Chart Lang Math Time Mockito Closure; do
   python3 commit_sentiment_analysis.py $project $tmp_dir $all_fix_commits "data/$project-sentiment-analysis.csv"
   rm -rf $tmp_dir
 done
+
+combined_data_file="data/all_project_sentiment_analysis.csv"
+rm $combined_data_file
+echo "project,commit_hash,commit_msg,file_changed,sentiment_score,subjectivity_score,bug_fix_commit" > $combined_data_file
+for project in CHart Lang Math Time Mockito Closure; do
+  tail -n +2 "data/$project-sentiment-analysis.csv" >> $combined_data_file
+done
