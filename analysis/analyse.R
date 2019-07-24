@@ -10,6 +10,7 @@ library(stringr)
 source("write.R")
 
 data <- read_delim("../data/all_project_sentiment_analysis.csv", escape_double = F, delim=",")
+full_data <- data
 
 if(Sys.getenv("THESIS_DIR") == ""){
   stop("Please ensure THESIS_DIR environment variable is set for macros, plots and tables")
@@ -170,4 +171,97 @@ plot <- data %>%
 readable.plot(plot, x.label = "Project", y.label = "Subjectivity Score") %>% save.plot(filename = "SUBJECTIVITY_VS_BUG_FIX.pdf")
 
 
+# rq 3 macros
+fault_classes <- read_csv("../data/classes_modified.csv", col_names = c("project", "bug_id", "file_changed"))
+file_names <- c()
+for (file_changed in full_data$file_changed){
+  org_index <- regexpr("org", file_changed)[[1]][1]
+  if (org_index < 0){
+    org_index <- regexpr("com", file_changed)[[1]][1]
+  }
+  short_name <- str_replace_all(substr(file_changed, org_index , nchar(file_changed)), "/", ".")
+  file_names <- c(file_names, 
+                  (substr
+                   (short_name, 
+                     0, nchar(short_name) - 5)
+                  )
+  )
+}
+full_data$file_changed <- file_names
+faulty_files <- full_data %>% 
+  filter(startsWith(file_changed, "org") | startsWith(file_changed, "com")) %>% 
+  left_join(fault_classes) %>%
+  mutate(is_faulty_class=!is.na(bug_id))
 
+top_50_commits <- faulty_files %>% 
+  group_by(commit_hash) %>% 
+  summarise(
+    sentiment=first(sentiment_score), 
+    contains_faulty_file = any(is_faulty_class), 
+    faulty_files = paste(ifelse(is_faulty_class, file_changed, ""), collapse=":")) %>% 
+  top_n(50, sentiment) %>%
+  arrange(-sentiment) %>%
+  slice(1:50) %>%
+  inner_join(full_data %>% select(project,commit_hash) %>% unique.data.frame()) %>%
+  select(5,1,2,3,4)
+
+write.macro("numTopFiftyContainingFaultyFiles", top_50_commits %>% ungroup() %>% filter(contains_faulty_file == T) %>% summarise(n=n()))
+
+bottom_50_commits <- faulty_files %>% 
+  group_by(commit_hash) %>% 
+  summarise(
+    sentiment=first(sentiment_score), 
+    contains_faulty_file = any(is_faulty_class), 
+    faulty_files = paste(ifelse(is_faulty_class, file_changed, ""), collapse=":")) %>% 
+  top_n(50, -sentiment) %>%
+  arrange(sentiment) %>%
+  slice(1:50) %>% 
+  inner_join(full_data %>% select(project,commit_hash) %>% unique.data.frame()) %>%
+  select(5,1,2,3,4)
+
+write.macro("numBottomFiftyContainingFaultyFiles", bottom_50_commits %>% ungroup() %>% filter(contains_faulty_file == T) %>% summarise(n=n()))
+
+stats_data <- data.frame(project = character(), sent.p.value = numeric(), sent.a12 = numeric(), subj.p.value = numeric(), subj.a12 = numeric(), stringsAsFactors = F)
+for(project in c("Chart", "Closure", "Lang", "Math", "Mockito", "Time")){
+  data.mask <- faulty_files[faulty_files$project==project,]
+  sent.p.value <- wilcox.test(data.mask[data.mask$is_faulty_class ==T,]$sentiment_score, data.mask[data.mask$is_faulty_class==F,]$sentiment_score)$p.value
+  subj.p.value <- wilcox.test(data.mask[data.mask$is_faulty_class ==T,]$subjectivity_score, data.mask[data.mask$is_faulty_class==F,]$subjectivity_score)$p.value
+  sent.a12 <- VD.A(data.mask$sentiment_score, data.mask$is_faulty_class)$estimate
+  subj.a12 <- VD.A(data.mask$subjectivity_score, data.mask$is_faulty_class)$estimate
+  stats_data[nrow(stats_data)+1,] = list(project, sent.p.value, sent.a12, subj.p.value, subj.a12)
+  write.macro(paste0("faultyClassSubjPValue",project), subj.p.value)
+  write.macro(paste0("faultyClassSubjAhat",project), subj.a12)
+  write.macro(paste0("faultyClassSentPValue",project), sent.p.value)
+  write.macro(paste0("faultyClassSentAhat",project), sent.a12)
+}
+
+faulty_file_data <- faulty_files %>% 
+  group_by(project,file_changed,commit_hash) %>%
+  # take a single value per commit
+  summarise(
+    sentiment_score = mean(sentiment_score), 
+    subjectivity_score = mean(subjectivity_score),  
+    is_faulty_class = first(is_faulty_class), 
+    num_changes = n()) %>% 
+  # average the scores per file
+  summarise(
+    average_sentiment = mean(sentiment_score), 
+    average_subjectivity = mean(subjectivity_score),  
+    is_faulty_class = first(is_faulty_class), 
+    num_changes = n())
+
+plot <- faulty_file_data %>%
+  ggplot(aes(x=project,y=average_sentiment)) + 
+    geom_boxplot(aes(group=interaction(project,is_faulty_class),fill=is_faulty_class)) +
+    geom_text(data = stats_data, aes(y = 1.25,x=project, label = paste0("p = ",format(round(sent.p.value,digits = 2),nsmall = 2))), size = 6) +
+    geom_text(data = stats_data, aes(y = 1.1,x=project, label = paste0("hat(A)  == ",format(round(sent.a12, digits=2), snamell = 2))), parse = T, size = 6) +
+    scale_y_continuous(limits=c(-1,1.25), breaks=c(-1,-0.6,-0.2,0.2,0.6,1))
+readable.plot(plot, "Average Sentiment", "Project") %>% save.plot("SENTIMENT_VS_FAULTY_CLASS.pdf")
+
+plot <- faulty_file_data %>%
+  ggplot(aes(x=project,y=average_subjectivity)) + 
+  geom_boxplot(aes(group=interaction(project,is_faulty_class),fill=is_faulty_class)) +
+  geom_text(data = stats_data, aes(y = 1.125,x=project, label = paste0("p = ",format(round(subj.p.value,digits = 2),nsmall = 2))), size = 6) +
+  geom_text(data = stats_data, aes(y = 1.05,x=project, label = paste0("hat(A)  == ",format(round(subj.a12, digits=2), snamell = 2))), parse = T, size = 6) +
+  scale_y_continuous(limits=c(0,1.125), breaks=c(0,0.2,0.4,0.6,0.8,1))
+readable.plot(plot, "Average Subjectivity", "Project") %>% save.plot("SUBJECTIVITY_VS_FAULTY_CLASS.pdf")
